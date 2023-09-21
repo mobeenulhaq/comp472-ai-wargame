@@ -323,7 +323,7 @@ class Game:
         # Validate the Input
         unit  = self.get(coords.src);
         if self.next_player is Player.Attacker:
-            if unit is not None:
+            if unit is not None and self.next_player is unit.player :
                 if unit.type is UnitType.AI or unit.type is UnitType.Firewall or unit.type is UnitType.Program:
                     if (coords.src.col - 1 is coords.dst.col and coords.src.row is coords.dst.row) or (coords.src.row - 1 is coords.dst.row and coords.src.col is coords.dst.col):
                         return True
@@ -338,7 +338,7 @@ class Game:
                 return False
             
         else:
-            if unit is not None:
+            if unit is not None and self.next_player is unit.player :
                 if unit.type is UnitType.AI or unit.type is UnitType.Firewall or unit.type is UnitType.Program:
                     if (coords.src.col + 1 is coords.dst.col and coords.src.row is coords.dst.row) or (coords.src.row + 1 is coords.dst.row and coords.src.col is coords.dst.col):
                         return True
