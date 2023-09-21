@@ -320,6 +320,38 @@ class Game:
 
     def is_valid_move(self, coords: CoordPair) -> bool:
         """Validate a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
+        # Validate the Input
+        unit  = self.get(coords.src);
+        if self.next_player is Player.Attacker:
+            if unit is not None:
+                if unit.type is UnitType.AI or unit.type is UnitType.Firewall or unit.type is UnitType.Program:
+                    if (coords.src.col - 1 is coords.dst.col and coords.src.row is coords.dst.row) or (coords.src.row - 1 is coords.dst.row and coords.src.col is coords.dst.col):
+                        return True
+                    else:
+                        return False
+                elif unit.type is UnitType.Tech or unit.type is UnitType.Virus:
+                    if (coords.src.col + 1 is coords.dst.col and coords.src.row is coords.dst.row )  or (coords.src.col - 1 is coords.dst.col and coords.src.row is coords.dst.row) or (coords.src.row - 1 is coords.dst.row and coords.src.col is coords.dst.col) or (coords.src.row + 1 is coords.dst.row and coords.src.col is coords.dst.col):
+                        return True
+                    else:
+                        return False
+            else:
+                return False
+            
+        else:
+            if unit is not None:
+                if unit.type is UnitType.AI or unit.type is UnitType.Firewall or unit.type is UnitType.Program:
+                    if (coords.src.col + 1 is coords.dst.col and coords.src.row is coords.dst.row) or (coords.src.row + 1 is coords.dst.row and coords.src.col is coords.dst.col):
+                        return True
+                    else:
+                        return False
+                elif unit.type is UnitType.Tech or unit.type is UnitType.Virus:
+                    if (coords.src.col + 1 is coords.dst.col and coords.src.row is coords.dst.row) or (coords.src.col - 1 is coords.dst.col and coords.src.row is coords.dst.row) or (coords.src.row - 1 is coords.dst.row and coords.src.col is coords.dst.col) or (coords.src.row + 1 is coords.dst.row and coords.src.col is coords.dst.col):   
+                        return True
+                    else:
+                        return False
+            else:
+                return False
+
         if not self.is_valid_coord(coords.src) or not self.is_valid_coord(coords.dst):
             return False
         unit = self.get(coords.src)
