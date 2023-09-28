@@ -192,6 +192,25 @@ class CoordPair:
             for col in range(self.src.col, self.dst.col + 1):
                 yield Coord(row, col)
 
+    def is_up_or_left(self) -> bool:  # helper function for is_valid_move()
+        """Checks whether dst coord is at the top and left of src coord"""
+        if self.dst.row <= self.src.row and self.dst.col <= self.src.col:
+            return True
+        return False
+
+    def are_diagonal(self) -> bool:  # helper function for is_valid_move()
+        """Checks whether dst coord and src coord are diagonal"""
+        if self.src.row != self.dst.row and self.src.col != self.dst.col:
+            return True
+        return False
+    
+    def are_adjacent(self) -> bool:  # helper function for is_valid_move()
+        """Checks whether dst coord and src coord are adjacent"""
+        for adj in self.src.iter_adjacent():
+            if self.dst == adj:
+                return True
+        return False
+
     @classmethod
     def from_quad(cls, row0: int, col0: int, row1: int, col1: int) -> CoordPair:
         """Create a CoordPair from 4 integers."""
@@ -318,47 +337,44 @@ class Game:
             target.mod_health(health_delta)
             self.remove_dead(coord)
 
+    def _engaged_in_combat(self, src_coord: Coord):  # helper function for is_valid_move()
+        """Checks whether src unit is engaged in combat"""
+        src_unit = self.get(src_coord)
+        for adj in src_coord.iter_adjacent():
+            adj_unit = self.get(adj)
+            if adj_unit is not None:
+                if src_unit.player != adj_unit.player:
+                    return True
+        return False
+
     def is_valid_move(self, coords: CoordPair) -> bool:
         """Validate a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
-        # Validate the Input
-        unit  = self.get(coords.src);
-        if self.next_player is Player.Attacker:
-            if unit is not None and self.next_player is unit.player :
-                if unit.type is UnitType.AI or unit.type is UnitType.Firewall or unit.type is UnitType.Program:
-                    if (coords.src.col - 1 is coords.dst.col and coords.src.row is coords.dst.row) or (coords.src.row - 1 is coords.dst.row and coords.src.col is coords.dst.col):
-                        return True
-                    else:
-                        return False
-                elif unit.type is UnitType.Tech or unit.type is UnitType.Virus:
-                    if (coords.src.col + 1 is coords.dst.col and coords.src.row is coords.dst.row )  or (coords.src.col - 1 is coords.dst.col and coords.src.row is coords.dst.row) or (coords.src.row - 1 is coords.dst.row and coords.src.col is coords.dst.col) or (coords.src.row + 1 is coords.dst.row and coords.src.col is coords.dst.col):
-                        return True
-                    else:
-                        return False
-            else:
-                return False
-            
-        else:
-            if unit is not None and self.next_player is unit.player :
-                if unit.type is UnitType.AI or unit.type is UnitType.Firewall or unit.type is UnitType.Program:
-                    if (coords.src.col + 1 is coords.dst.col and coords.src.row is coords.dst.row) or (coords.src.row + 1 is coords.dst.row and coords.src.col is coords.dst.col):
-                        return True
-                    else:
-                        return False
-                elif unit.type is UnitType.Tech or unit.type is UnitType.Virus:
-                    if (coords.src.col + 1 is coords.dst.col and coords.src.row is coords.dst.row) or (coords.src.col - 1 is coords.dst.col and coords.src.row is coords.dst.row) or (coords.src.row - 1 is coords.dst.row and coords.src.col is coords.dst.col) or (coords.src.row + 1 is coords.dst.row and coords.src.col is coords.dst.col):   
-                        return True
-                    else:
-                        return False
-            else:
-                return False
-
         if not self.is_valid_coord(coords.src) or not self.is_valid_coord(coords.dst):
             return False
         unit = self.get(coords.src)
         if unit is None or unit.player != self.next_player:
             return False
+        # if both coords are equal then it's a valid self-destruction move
+        if coords.src == coords.dst:
+            return True
+        # diagonal moves are invalid
+        if coords.are_diagonal():
+            return False
+        if unit.type in {UnitType.AI, UnitType.Firewall, UnitType.Program}:
+            # AI, Firewall and Program can't move if engaged in combat
+            if self._engaged_in_combat(coords.src):
+                return False
+            # Attacker's AI, Firewall and Program can only move up or left
+            if unit.player == Player.Attacker and not coords.is_up_or_left():
+                return False
+            # Defender's AI, Firewall and Program can only move down or right
+            if unit.player == Player.Defender and coords.is_up_or_left():
+                return False
         unit = self.get(coords.dst)
-        return (unit is None)
+        # check if src and dst are not adjacent (i.e. attack/repair don't apply) then dst should be empty
+        if not coords.are_adjacent() and unit is not None:
+            return False
+        return True
 
     def perform_move(self, coords: CoordPair) -> Tuple[bool, str]:
         """Validate and perform a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
