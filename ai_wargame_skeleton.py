@@ -194,9 +194,8 @@ class CoordPair:
 
     def is_up_or_left(self) -> bool:  # helper function for is_valid_move()
         """Checks whether dst coord is at the top and left of src coord"""
-        if self.dst.row <= self.src.row and self.dst.col <= self.src.col:
-            return True
-        return False
+        return (self.dst.row < self.src.row and self.dst.col == self.src.col) or \
+            (self.dst.row == self.src.row and self.dst.col < self.src.col)
 
     def are_diagonal(self) -> bool:  # helper function for is_valid_move()
         """Checks whether dst coord and src coord are diagonal"""
@@ -357,37 +356,24 @@ class Game:
         # if both coords are equal then it's a valid self-destruction move
         if coords.src == coords.dst:
             return True
-        # diagonal moves are invalid
+        if not coords.are_adjacent():
+            return False
         if coords.are_diagonal():
             return False
-        if unit.type in {UnitType.AI, UnitType.Firewall, UnitType.Program}:
-            if self._engaged_in_combat(coords.src):
-                # AI, Firewall and Program can't move if engaged in combat
-                if unit.player == Player.Attacker and not coords.is_up_or_left():
-                    return False
-                # Defender's AI, Firewall and Program can only move down or right
-                if unit.player == Player.Defender and coords.is_up_or_left():
-                    return False
-                if self.get(coords.dst) is not None and self.get(coords.dst).player != unit.player:
-                    return True  
-                return False
-            # Attacker's AI, Firewall and Program can only move up or left
-            if unit.player == Player.Attacker and not coords.is_up_or_left():
-                return False
-            # Defender's AI, Firewall and Program can only move down or right
-            if unit.player == Player.Defender and coords.is_up_or_left():
-                return False
-        unit = self.get(coords.dst)
-        # check if src and dst are not adjacent (i.e. attack/repair don't apply) then dst should be empty
-        if not coords.are_adjacent() and unit is not None:
-            return False
-        return True
-
-    def _is_repair(self, coords: CoordPair) -> bool:  # helper function for perform_move()
-        """Checks whether the latest action is repair"""
-        if coords.are_adjacent() and self.get(coords.src).player == self.get(coords.dst).player:
+        # Virus and Tech can move freely
+        if unit.type.name in {"Virus", "Tech"}:
             return True
-        return False
+        # for AI, Firewall, Program
+        vacant = self.get(coords.dst) is None  # destination is vacant
+        eic = self._engaged_in_combat(coords.src)  # src unit engaged in combat
+        up_or_left = coords.is_up_or_left()  # destination is up or left of source
+        if unit.player == Player.Attacker:
+            if vacant and (eic or not up_or_left):
+                return False
+        elif unit.player == Player.Defender:
+            if vacant and (eic or up_or_left):
+                return False
+        return True
 
     def _self_destruct(self, src_coord: Coord):  # helper function for perform_move()
         """Executes the unit self-destruct action"""
@@ -400,35 +386,32 @@ class Game:
     def perform_move(self, coords: CoordPair) -> Tuple[bool, str]:
         """Validate and perform a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
         if self.is_valid_move(coords):
+            s = self.get(coords.src)
+            t = self.get(coords.dst)
             # case: action is self-destruct
-            if coords.src == coords.dst:
+            if s == t:
                 self._self_destruct(coords.src)
                 return (True, "")
-            # case: action is attack M
-            elif coords.are_adjacent() and self._engaged_in_combat(coords.src) and self.get(coords.dst) is not None and self.get(coords.dst).player != self.get(coords.src).player:
-                s = self.get(coords.src);
-                t = self.get(coords.dst);
-                health_delta_t = s.damage_amount(t)
-                health_delta_s = t.damage_amount(s)
-                self.mod_health(coords.src,-health_delta_s);
-                self.mod_health(coords.dst,-health_delta_t);
+            # case: action is harmless movement
+            elif t is None:
+                self.set(coords.dst, s)
+                self.set(coords.src, None)
+                return (True, "")
+            # case: action is attack
+            elif s.player != t.player:
+                health_delta_t = -s.damage_amount(t)
+                health_delta_s = -t.damage_amount(s)
+                self.mod_health(coords.src, health_delta=health_delta_s)
+                self.mod_health(coords.dst, health_delta=health_delta_t)
                 return (True,"")
             # case: action is repair
-            elif self.get(coords.dst) is not None and self._is_repair(coords):
-                s = self.get(coords.src)
-                t = self.get(coords.dst)
-                health_delta = s.repair_table[s.type.value][t.type.value]
-                if health_delta == 0 or t.health == 9:
+            else:
+                health_delta = s.repair_amount(t)
+                if health_delta == 0:
                     # repair invalid
                     return (False, "invalid move")
                 self.mod_health(coords.dst, health_delta=health_delta)
                 return (True, "")
-            # case: action is movement
-            else:
-                self.set(coords.dst, self.get(coords.src))
-                self.set(coords.src, None)
-                return (True, "")
-                
         return (False, "invalid move")
 
     def next_turn(self):
