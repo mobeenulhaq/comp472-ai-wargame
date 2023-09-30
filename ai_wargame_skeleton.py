@@ -361,8 +361,15 @@ class Game:
         if coords.are_diagonal():
             return False
         if unit.type in {UnitType.AI, UnitType.Firewall, UnitType.Program}:
-            # AI, Firewall and Program can't move if engaged in combat
             if self._engaged_in_combat(coords.src):
+                # AI, Firewall and Program can't move if engaged in combat
+                if unit.player == Player.Attacker and not coords.is_up_or_left():
+                    return False
+                # Defender's AI, Firewall and Program can only move down or right
+                if unit.player == Player.Defender and coords.is_up_or_left():
+                    return False
+                if self.get(coords.dst) is not None and self.get(coords.dst).player != unit.player:
+                    return True  
                 return False
             # Attacker's AI, Firewall and Program can only move up or left
             if unit.player == Player.Attacker and not coords.is_up_or_left():
@@ -397,16 +404,17 @@ class Game:
             if coords.src == coords.dst:
                 self._self_destruct(coords.src)
                 return (True, "")
-            # case: action is movement
-            elif not coords.are_adjacent():
-                self.set(coords.dst, self.get(coords.src))
-                self.set(coords.src, None)
-                return (True, "")
-            # case: action is attack
-            elif coords.are_adjacent() and self._engaged_in_combat(coords.src):
-                pass
+            # case: action is attack M
+            elif coords.are_adjacent() and self._engaged_in_combat(coords.src) and self.get(coords.dst) is not None and self.get(coords.dst).player != self.get(coords.src).player:
+                s = self.get(coords.src);
+                t = self.get(coords.dst);
+                health_delta_t = s.damage_amount(t)
+                health_delta_s = t.damage_amount(s)
+                self.mod_health(coords.src,-health_delta_s);
+                self.mod_health(coords.dst,-health_delta_t);
+                return (True,"")
             # case: action is repair
-            elif self._is_repair(coords):
+            elif self.get(coords.dst) is not None and self._is_repair(coords):
                 s = self.get(coords.src)
                 t = self.get(coords.dst)
                 health_delta = s.repair_table[s.type.value][t.type.value]
@@ -415,6 +423,12 @@ class Game:
                     return (False, "invalid move")
                 self.mod_health(coords.dst, health_delta=health_delta)
                 return (True, "")
+            # case: action is movement
+            else:
+                self.set(coords.dst, self.get(coords.src))
+                self.set(coords.src, None)
+                return (True, "")
+                
         return (False, "invalid move")
 
     def next_turn(self):
