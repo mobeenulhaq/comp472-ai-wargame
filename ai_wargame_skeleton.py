@@ -376,12 +376,37 @@ class Game:
             return False
         return True
 
+    def _is_repair(self, coords: CoordPair) -> bool:  # helper function for perform_move()
+        """Checks whether the latest move is repair"""
+        if coords.are_adjacent() and self.get(coords.src).player == self.get(coords.dst).player:
+            return True
+        return False
+
+    def _self_destruct(self, src_coord: Coord):  # helper function for perform_move()
+        """Executes the unit self-destruction move"""
+        for coord in src_coord.iter_range(dist=1):
+            # modify health of all 8 surrounding units
+            if self.get(coord):
+                self.mod_health(coord, -2)
+        self.remove_dead(src_coord)
+
     def perform_move(self, coords: CoordPair) -> Tuple[bool, str]:
         """Validate and perform a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
         if self.is_valid_move(coords):
-            self.set(coords.dst, self.get(coords.src))
-            self.set(coords.src, None)
-            return (True, "")
+            # case: move is self-destruct
+            if coords.src == coords.dst:
+                pass
+            # case: move is movement
+            elif not coords.are_adjacent():
+                self.set(coords.dst, self.get(coords.src))
+                self.set(coords.src, None)
+                return (True, "")
+            # case: move is attack
+            elif coords.are_adjacent() and self._engaged_in_combat(coords.src):
+                pass
+            # case: move is repair
+            elif self._is_repair(coords):
+                pass
         return (False, "invalid move")
 
     def next_turn(self):
