@@ -269,6 +269,7 @@ class Game:
     """Representation of the game state."""
     board: list[list[Unit | None]] = field(default_factory=list)
     next_player: Player = Player.Attacker
+    current_action: str = ""
     turns_played: int = 0
     options: Options = field(default_factory=Options)
     stats: Stats = field(default_factory=Stats)
@@ -391,11 +392,13 @@ class Game:
             # case: action is self-destruct
             if s == t:
                 self._self_destruct(coords.src)
+                self.current_action = "self-destruct"
                 return (True, "")
             # case: action is harmless movement
             elif t is None:
                 self.set(coords.dst, s)
                 self.set(coords.src, None)
+                self.current_action = "move"
                 return (True, "")
             # case: action is attack
             elif s.player != t.player:
@@ -403,6 +406,7 @@ class Game:
                 health_delta_s = -t.damage_amount(s)
                 self.mod_health(coords.src, health_delta=health_delta_s)
                 self.mod_health(coords.dst, health_delta=health_delta_t)
+                self.current_action = "attack"
                 return (True,"")
             # case: action is repair
             else:
@@ -411,6 +415,7 @@ class Game:
                     # repair invalid
                     return (False, "invalid move")
                 self.mod_health(coords.dst, health_delta=health_delta)
+                self.current_action = "repair"
                 return (True, "")
         return (False, "invalid move")
 
