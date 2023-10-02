@@ -247,10 +247,13 @@ class Options:
     min_depth: int | None = 2
     max_time: float | None = 5.0
     game_type: GameType = GameType.AttackerVsDefender
-    alpha_beta: bool = True
+    alpha_beta: bool = False
     max_turns: int | None = 100
     randomize_moves: bool = True
     broker: str | None = None
+
+    def get_filename(self):
+        return f"gameTrace-{self.alpha_beta}-{str(int(self.max_time))}-{self.max_turns}.txt"
 
 
 ##############################################################################################################
@@ -269,7 +272,6 @@ class Game:
     """Representation of the game state."""
     board: list[list[Unit | None]] = field(default_factory=list)
     next_player: Player = Player.Attacker
-    current_action: str = ""
     turns_played: int = 0
     options: Options = field(default_factory=Options)
     stats: Stats = field(default_factory=Stats)
@@ -382,23 +384,26 @@ class Game:
         for coord in src_coord.iter_range(dist=1):
             if self.get(coord):
                 self.mod_health(coord, -2)
-        self.set(src_coord, None)
+        self.mod_health(src_coord, -9)
 
     def perform_move(self, coords: CoordPair) -> Tuple[bool, str]:
         """Validate and perform a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
         if self.is_valid_move(coords):
             s = self.get(coords.src)
             t = self.get(coords.dst)
+            text = ""
             # case: action is self-destruct
             if s == t:
                 self._self_destruct(coords.src)
-                self.current_action = "self-destruct"
+                text += f"Self-destruct at {coords.src}\n{self}\n\n"
+                write_game_state_text_to_file(filename=self.options.get_filename(), text=text)
                 return (True, "")
             # case: action is harmless movement
             elif t is None:
                 self.set(coords.dst, s)
                 self.set(coords.src, None)
-                self.current_action = "move"
+                text += f"Move from {coords.src} to {coords.dst}\n{self}\n\n"
+                write_game_state_text_to_file(filename=self.options.get_filename(), text=text)
                 return (True, "")
             # case: action is attack
             elif s.player != t.player:
@@ -406,7 +411,8 @@ class Game:
                 health_delta_s = -t.damage_amount(s)
                 self.mod_health(coords.src, health_delta=health_delta_s)
                 self.mod_health(coords.dst, health_delta=health_delta_t)
-                self.current_action = "attack"
+                text += f"Attack from {coords.src} to {coords.dst}\n{self}\n\n"
+                write_game_state_text_to_file(filename=self.options.get_filename(), text=text)
                 return (True,"")
             # case: action is repair
             else:
@@ -415,7 +421,8 @@ class Game:
                     # repair invalid
                     return (False, "invalid move")
                 self.mod_health(coords.dst, health_delta=health_delta)
-                self.current_action = "repair"
+                text += f"Repair from {coords.src} to {coords.dst}\n{self}\n\n"
+                write_game_state_text_to_file(filename=self.options.get_filename(), text=text)
                 return (True, "")
         return (False, "invalid move")
 
@@ -623,6 +630,11 @@ class Game:
 
 ##############################################################################################################
 
+def write_game_state_text_to_file(filename, text):
+    with open(filename, 'a') as file:
+        file.write(text)
+
+
 def main():
     # parse command line arguments
     parser = argparse.ArgumentParser(
@@ -630,6 +642,7 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--max_depth', type=int, help='maximum search depth')
     parser.add_argument('--max_time', type=float, help='maximum search time')
+    parser.add_argument('--max_turns', type=float, help='maximum number of turns')
     parser.add_argument('--game_type', type=str, default="manual", help='game type: auto|attacker|defender|manual')
     parser.add_argument('--broker', type=str, help='play via a game broker')
     args = parser.parse_args()
@@ -652,11 +665,18 @@ def main():
         options.max_depth = args.max_depth
     if args.max_time is not None:
         options.max_time = args.max_time
+    if args.max_turns is not None:
+        options.max_turns = args.max_turns
     if args.broker is not None:
         options.broker = args.broker
 
     # create a new game
     game = Game(options=options)
+
+    # write initial required game params to text file
+    filename = options.get_filename()
+    initial_file_text = f"timeout: {options.max_time}\nmax turns: {options.max_turns}\nplayer 1 = H & player 2 = H\n\n{game}"
+    write_game_state_text_to_file(filename=filename, text=initial_file_text)
 
     # the main game loop
     while True:
@@ -665,6 +685,7 @@ def main():
         winner = game.has_winner()
         if winner is not None:
             print(f"{winner.name} wins!")
+            write_game_state_text_to_file(filename=filename, text=f"{winner.name} wins in {game.turns_played} turns")
             break
         if game.options.game_type == GameType.AttackerVsDefender:
             game.human_turn()
