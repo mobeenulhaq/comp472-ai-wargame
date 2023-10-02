@@ -16,5 +16,5 @@ To run the game, execute the ai_wargame script using Python. The following comma
 ## Example command
 
 ```shell
-python ai_wargame.py --max_depth 5 --max_time 10.5 --max_turns 100 --game_type attacker
+python ai_wargame.py --max_time 10 --max_turns 25 --game_type manual
 ```
