@@ -1,4 +1,4 @@
-# comp472-ai-wargame
+# AI Wargame
 
 ## Introduction
 
