@@ -531,13 +531,10 @@ class Game:
         """Check if the game is over and returns winner"""
         if self.options.max_turns is not None and self.turns_played >= self.options.max_turns:
             return Player.Defender
-        elif self._attacker_has_ai:
-            if self._defender_has_ai:
-                return None
-            else:
-                return Player.Attacker
-        elif self._defender_has_ai:
-            return Player.Defender
+        elif self._attacker_has_ai and not self._defender_has_ai:
+            return Player.Attacker
+        # all other cases lead to Defender winning
+        return Player.Defender
 
     def move_candidates(self) -> Iterable[CoordPair]:
         """Generate valid move candidates for the next player."""
