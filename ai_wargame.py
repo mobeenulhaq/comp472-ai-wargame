@@ -548,6 +548,12 @@ class Game:
             move.dst = src
             yield move.clone()
 
+    def minimax(self):
+        """minimax recursive algorithm goes here.
+        This function will replace random_move function.
+        TODO: Add alpha-beta pruning as second step"""
+        pass
+
     def random_move(self) -> Tuple[int, CoordPair | None, float]:
         """Returns a random move."""
         move_candidates = list(self.move_candidates())
