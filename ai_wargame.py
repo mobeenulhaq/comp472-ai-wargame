@@ -304,6 +304,94 @@ class Game:
         new = copy.copy(self)
         new.board = copy.deepcopy(self.board)
         return new
+    
+
+    def unit_count (self,player:Player):
+        unit_count = {}
+        for _,unit in self.player_units(player):
+            unit_count[unit.type] =  unit_count.get(unit.type, 0) + 1;
+
+        return unit_count
+
+    
+    def heuristic(self,player:Player):
+        count = self.unit_count(player)
+        count2 = None
+        if(player == Player.Attacker):
+            count2 = self.unit_count(Player.Defender)
+        else: 
+            count2 = self.unit_count(Player.Attacker)
+        sum = ((3*count.get(UnitType.Virus,0)) + (3*count.get(UnitType.Tech,0)) + (3*count.get(UnitType.Firewall,0)) + (3* count.get(UnitType.Program,0)) +(9999 * count.get(UnitType.AI,0)))
+        sum2 = ((3*count2.get(UnitType.Virus,0)) + (3*count2.get(UnitType.Tech,0)) + (3*count2.get(UnitType.Firewall,0)) + (3* count2.get(UnitType.Program,0)) +(9999 * count2.get(UnitType.AI,0)))
+        return sum - sum2
+    
+
+    # The Algorithim responsible for determining AI's next move
+    # TODO Alpa-Beta pruning
+    def minimax(self,depth: int,maximum :bool,game: Game, player : Player) :
+        value : int = None
+        coordPair :  CoordPair = None
+        # Check for the winner
+        if(game.has_winner() is not None):
+            if(game.is_finished() == player):
+
+                return (game.heuristic(player),coordPair,0)
+            else:
+                return (game.heuristic(player),coordPair,0)
+        # Check for the depth Reached
+        elif (depth == game.options.max_depth) :    
+            return (game.heuristic(player),coordPair,0)
+        
+        #Generate List of childrens
+        children = list(game.move_candidates());
+                
+        for i in children:       
+            if(maximum == True):
+                # Create Child State
+                game2 = game.clone()
+                # Perform Move in the cloned object
+                game2.perform_move(i)
+                # Change the Turn for the object
+                game2.next_turn()
+                (v,_,_) = self.minimax(depth=depth + 1,maximum=False,game=game2,player=player)
+
+
+                
+                
+                # Intially when value is None then set it to any value
+                if(value is None):
+                    value = v
+                    coordPair = i
+                elif (v > value):
+                    value = v
+                    coordPair = i
+
+
+                
+            else :
+                # Create Child State
+                game2 = game.clone()
+          
+                # Perform Move
+                game2.perform_move(i)
+
+                # Set the next turn
+                game2.next_turn() 
+                 
+                (v,_,_) = self.minimax(depth=depth + 1,maximum=True,game=game2,player=player)                
+                
+                # Intially when value is None then set it to any value
+                # or Minimize the Value
+                if(value is None):
+                    value = v
+                    coordPair = i
+                elif (v < value):
+                    value = v
+                    coordPair = i
+
+           
+                
+        return (value,coordPair,0);
 
     def is_empty(self, coord: Coord) -> bool:
         """Check if contents of a board cell of the game at Coord is empty (must be valid coord)."""
@@ -531,10 +619,13 @@ class Game:
         """Check if the game is over and returns winner"""
         if self.options.max_turns is not None and self.turns_played >= self.options.max_turns:
             return Player.Defender
-        elif self._attacker_has_ai and not self._defender_has_ai:
-            return Player.Attacker
-        # all other cases lead to Defender winning
+        if self._attacker_has_ai:
+            if self._defender_has_ai:
+                return None
+            else:
+                return Player.Attacker    
         return Player.Defender
+
 
     def move_candidates(self) -> Iterable[CoordPair]:
         """Generate valid move candidates for the next player."""
@@ -548,12 +639,6 @@ class Game:
             move.dst = src
             yield move.clone()
 
-    def minimax(self):
-        """minimax recursive algorithm goes here.
-        This function will replace random_move function.
-        TODO: Add alpha-beta pruning as second step"""
-        pass
-
     def random_move(self) -> Tuple[int, CoordPair | None, float]:
         """Returns a random move."""
         move_candidates = list(self.move_candidates())
@@ -562,11 +647,16 @@ class Game:
             return (0, move_candidates[0], 1)
         else:
             return (0, None, 0)
+    
 
     def suggest_move(self) -> CoordPair | None:
         """Suggest the next move using minimax alpha beta. TODO: REPLACE RANDOM_MOVE WITH PROPER GAME LOGIC!!!"""
         start_time = datetime.now()
-        (score, move, avg_depth) = self.random_move()
+        # Clone the Game
+        game  = self.clone();
+        # Run Alogorithim
+        (score, move, avg_depth) = self.minimax(0,maximum=True,game=game,player=self.next_player)
+        
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
         self.stats.total_seconds += elapsed_seconds
         print(f"Heuristic score: {score}")
