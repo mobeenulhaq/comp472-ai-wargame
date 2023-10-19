@@ -616,20 +616,18 @@ class Game:
         current_elapsed_time = (datetime.now() - start_time).total_seconds()
 
         # If depth has been reached or the game is finished, return a heuristic value
-        if depth == 0 or self.is_finished():
+        if self.is_finished():
             if self.has_winner() == Player.Attacker:
-                return (MAX_HEURISTIC_SCORE, None)
-            elif self.has_winner() == Player.Defender:
                 return (MIN_HEURISTIC_SCORE, None)
-            else:
-                return (self.evaluate('e1'), None)
+            elif self.has_winner() == Player.Defender:
+                return (MAX_HEURISTIC_SCORE, None)
         elif depth == 0:
             return (self.evaluate('e1'), None)
 
-        best_move = CoordPair()
+        best_move = None
 
         if maximizing_player:  # for the maximizing player
-            max_eval = float('-inf')
+            max_eval = MIN_HEURISTIC_SCORE
             for move in self.move_candidates():
                 game_clone = self.clone()
                 game_clone.perform_move(move)
@@ -649,7 +647,7 @@ class Game:
             return max_eval, best_move
 
         else:  # for the minimizing player
-            min_eval = float('inf')
+            min_eval = MAX_HEURISTIC_SCORE
             for move in self.move_candidates():
                 game_clone = self.clone()
                 game_clone.perform_move(move)
