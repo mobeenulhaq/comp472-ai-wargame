@@ -505,9 +505,9 @@ class Game:
                 else:
                     print("The move is not valid! Try again.")
 
-    def computer_turn(self, player: Player) -> CoordPair | None:
+    def computer_turn(self) -> CoordPair | None:
         """Computer plays a move."""
-        mv = self.suggest_move(player)
+        mv = self.suggest_move()
         if mv is not None:
             (success, result) = self.perform_move(mv)
             if success:
@@ -615,54 +615,56 @@ class Game:
 
         current_elapsed_time = (datetime.now() - start_time).total_seconds()
 
-        # If depth has been reached or the game is finished, return a heuristic value
+        # If depth has been reached or the game is finished or max time has approached, return a heuristic value
         if self.is_finished():
             if self.has_winner() == Player.Attacker:
-                return (MIN_HEURISTIC_SCORE, None)
-            elif self.has_winner() == Player.Defender:
                 return (MAX_HEURISTIC_SCORE, None)
-        elif depth == 0:
+            elif self.has_winner() == Player.Defender:
+                return (MIN_HEURISTIC_SCORE, None)
+        elif depth == 0 or current_elapsed_time > max_time:
             return (self.evaluate('e1'), None)
 
         best_move = None
 
         if maximizing_player:  # for the maximizing player
-            max_eval = MIN_HEURISTIC_SCORE
+            max_eval = float('-inf')
             for move in self.move_candidates():
                 game_clone = self.clone()
-                game_clone.perform_move(move)
-                eval_value, potential_best_move = game_clone.minimax(depth - 1, alpha, beta, False, start_time, max_time)
+                (success, result) = game_clone.perform_move(move)
+                if success:
+                    eval_value, _ = game_clone.minimax(depth - 1, alpha, beta, False, start_time, max_time)
+                else:
+                    continue
 
                 if eval_value > max_eval:
                     max_eval = eval_value
-                    best_move = potential_best_move or move  # Use the potential_best_move if it's not None, otherwise use the current move
+                    best_move = move
 
-                alpha = max(alpha, max_eval)
-                if alpha >= beta:
+                if max_eval > beta:
                     break
 
-            if current_elapsed_time > max_time:  # If time is about to expire, return the best move found so far
-                return (self.evaluate('e1'), None)
+                alpha = max(alpha, max_eval)
 
             return max_eval, best_move
 
         else:  # for the minimizing player
-            min_eval = MAX_HEURISTIC_SCORE
+            min_eval = float('inf')
             for move in self.move_candidates():
                 game_clone = self.clone()
-                game_clone.perform_move(move)
-                eval_value, potential_best_move = game_clone.minimax(depth - 1, alpha, beta, True, start_time, max_time)
+                (success, result) = game_clone.perform_move(move)
+                if success:
+                    eval_value, _ = game_clone.minimax(depth - 1, alpha, beta, True, start_time, max_time)
+                else:
+                    continue
 
                 if eval_value < min_eval:
                     min_eval = eval_value
-                    best_move = potential_best_move or move
+                    best_move = move
 
-                beta = min(beta, min_eval)
-                if alpha >= beta:
+                if min_eval < alpha:
                     break
 
-            if current_elapsed_time > max_time:
-                return (self.evaluate('e1'), None)
+                beta = min(beta, min_eval)
 
             return min_eval, best_move
 
@@ -675,7 +677,7 @@ class Game:
         else:
             return (0, None, 0)
 
-    def suggest_move(self, player: Player) -> CoordPair | None:
+    def suggest_move(self) -> CoordPair | None:
         """Suggest the next move using minimax alpha-beta."""
 
         max_depth = int(self.options.max_depth)
@@ -684,13 +686,12 @@ class Game:
         start_time = datetime.now()
 
         # Use the minimax algorithm to get the best move.
-        score, move = self.minimax(max_depth, float('-inf'), float('inf'), player == Player.Attacker, start_time, max_time)  # Attacker will always be the initial maximizer
+        score, move = self.minimax(max_depth, float('-inf'), float('inf'), self.next_player == Player.Attacker, start_time, max_time)  # Attacker will always be the initial maximizer
 
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
         self.stats.total_seconds += elapsed_seconds
 
         print(f"Heuristic score: {score}")
-
         print(f"Evals per depth: ", end='')
         for k in sorted(self.stats.evaluations_per_depth.keys()):
             print(f"{k}:{self.stats.evaluations_per_depth[k]} ", end='')
@@ -755,8 +756,9 @@ class Game:
 ##############################################################################################################
 
 def write_game_state_to_file(filename, text):
-    with open(filename, 'a') as file:
-        file.write(text)
+    # with open(filename, 'a') as file:
+    #     file.write(text)
+    pass
 
 
 def main():
@@ -819,7 +821,7 @@ def main():
             game.human_turn()
         else:
             player = game.next_player
-            move = game.computer_turn(player)
+            move = game.computer_turn()
             if move is not None:
                 game.post_move_to_broker(move)
             else:
