@@ -8,6 +8,7 @@ from time import sleep
 from typing import Tuple, TypeVar, Type, Iterable, ClassVar
 import random
 import requests
+import math
 
 # maximum and minimum values for our heuristic scores (usually represents an end of game condition)
 MAX_HEURISTIC_SCORE = 2000000000
@@ -251,6 +252,7 @@ class Options:
     max_turns: int | None = 100
     randomize_moves: bool = True
     broker: str | None = None
+    heuristic : str | None = 'e0'
 
     def get_filename(self):
         return f"gameTrace-{self.alpha_beta}-{str(int(self.max_time))}-{str(int(self.max_turns))}.txt"
@@ -582,6 +584,30 @@ class Game:
                 defender_potential_damage += Unit.damage_table[unit.type.value][opp_unit.type.value]
 
         return attacker_potential_damage - defender_potential_damage
+    
+    def get_distance_between_coord (self,Coord1 :Coord, Coord2 : Coord) :
+        columne_distance = Coord1.col - Coord2.col
+        row_distance = Coord1.row - Coord2.row
+        return math.sqrt(columne_distance ** 2 + row_distance **2 )
+
+    def get_distance_from_AI(self):
+        # Calculate Distance of AI from Friendly Units
+        attacker_ai_distance = 0
+        defender_ai_distance = 0
+        for coords,unit in self.player_units(Player.Attacker):
+            if(unit.type == UnitType.AI):
+                for friendly_coord,friendly_unit in self.player_units(Player.Attacker):
+                    if(friendly_unit.type != UnitType.AI):
+                        attacker_ai_distance += 1/(self.get_distance_between_coord(coords,friendly_coord))
+                break
+        
+        for coords,unit in self.player_units(Player.Defender):
+            if(unit.type == UnitType.AI):
+                for friendly_coord,friendly_unit in self.player_units(Player.Defender):
+                    if(friendly_unit.type != UnitType.AI):
+                        defender_ai_distance += 1/(self.get_distance_between_coord(coords,friendly_coord))
+                break
+        return attacker_ai_distance - defender_ai_distance
 
     def evaluate(self, heuristic_type: str) -> int:
         """Evaluate the board state using the given heuristic. Currently only support e0, e1. TODO: add e2"""
@@ -608,7 +634,10 @@ class Game:
             aggregate_health_delta = self.get_aggregate_health(Player.Attacker) - self.get_aggregate_health(Player.Defender)
             potential_damage_delta = self.get_potential_damage_delta()
             heuristic_value = aggregate_health_delta + potential_damage_delta
-
+        
+        elif heuristic_type == 'e2':
+            heuristic_value = self.get_distance_from_AI()
+        
         return int(heuristic_value)
 
     def minimax(self, depth: int, alpha: float, beta: float, maximizing_player: bool, start_time: datetime, max_time: float) -> Tuple[int, CoordPair | None]:
@@ -636,7 +665,7 @@ class Game:
         elif depth == 0 or current_elapsed_time > max_time:
             self.stats.evaluations_per_depth[actual_depth] += 1
             self.current_evaluations_per_depth[actual_depth] += 1
-            return (self.evaluate('e0'), None)
+            return (self.evaluate(self.options.heuristic), None)
 
         best_move = None
 
@@ -813,6 +842,7 @@ def main():
     parser.add_argument('--max_turns', type=float, help='maximum number of turns')
     parser.add_argument('--game_type', type=str, default="manual", help='game type: auto|attacker|defender|manual')
     parser.add_argument('--broker', type=str, help='play via a game broker')
+    parser.add_argument('--heuristic',type=str,default='e0')
     args = parser.parse_args()
 
     # parse the game type
@@ -837,6 +867,8 @@ def main():
         options.max_turns = args.max_turns
     if args.broker is not None:
         options.broker = args.broker
+    if args.heuristic is not None:
+        options.heuristic = args.heuristic
 
     # create a new game
     game = Game(options=options)
