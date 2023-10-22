@@ -275,6 +275,8 @@ class Game:
     turns_played: int = 0
     options: Options = field(default_factory=Options)
     stats: Stats = field(default_factory=Stats)
+    nodes_visited: int = 0
+    current_evaluations_per_depth: dict[int, int] = field(default_factory=dict)
     _attacker_has_ai: bool = True
     _defender_has_ai: bool = True
 
@@ -613,14 +615,27 @@ class Game:
         """minimax recursive algorithm with alpha-beta pruning."""
 
         current_elapsed_time = (datetime.now() - start_time).total_seconds()
+        actual_depth = self.options.max_depth - depth
+        if actual_depth not in self.stats.evaluations_per_depth:
+            self.stats.evaluations_per_depth[actual_depth] = 0
+        if actual_depth not in self.current_evaluations_per_depth:
+            self.current_evaluations_per_depth[actual_depth] = 0
+
+        self.nodes_visited += 1
 
         # If depth has been reached or the game is finished or max time has approached, return a heuristic value
         if self.is_finished():
             if self.has_winner() == Player.Attacker:
+                self.stats.evaluations_per_depth[actual_depth] += 1
+                self.current_evaluations_per_depth[actual_depth] += 1
                 return (MAX_HEURISTIC_SCORE, None)
             elif self.has_winner() == Player.Defender:
+                self.stats.evaluations_per_depth[actual_depth] += 1
+                self.current_evaluations_per_depth[actual_depth] += 1
                 return (MIN_HEURISTIC_SCORE, None)
         elif depth == 0 or current_elapsed_time > max_time:
+            self.stats.evaluations_per_depth[actual_depth] += 1
+            self.current_evaluations_per_depth[actual_depth] += 1
             return (self.evaluate('e0'), None)
 
         best_move = None
@@ -690,16 +705,45 @@ class Game:
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
         self.stats.total_seconds += elapsed_seconds
 
+        text = ""
+
         print(f"Heuristic score: {score}")
-        print(f"Evals per depth: ", end='')
+        text += f"Heuristic score: {score}\n"
+        cumulative_evals = 0
+        for eval_count in self.stats.evaluations_per_depth.values():
+            cumulative_evals += eval_count
+        print(f"Cumulative evals: {cumulative_evals}")
+        text += f"Cumulative evals: {cumulative_evals}\n"
+        print(f"Cumulative Evals per depth: ", end='')
+        text += "Cumulative Evals per depth: \n"
         for k in sorted(self.stats.evaluations_per_depth.keys()):
-            print(f"{k}:{self.stats.evaluations_per_depth[k]} ", end='')
+            if k != 0:
+                print(f"{k}:{self.stats.evaluations_per_depth[k]} ", end='')
+                text += f"{k}:{self.stats.evaluations_per_depth[k]} "
         print()
+        text += "\n"
         total_evals = sum(self.stats.evaluations_per_depth.values())
+        cumulative_percent = 0
+        print("Cumulative % Evals per depth: ", end='')
+        text += "Cumulative % Evals per depth: \n"
+        for k in sorted(self.stats.evaluations_per_depth.keys()):
+            if k != 0:
+                percentage = (self.stats.evaluations_per_depth[k] / total_evals) * 100
+                cumulative_percent += percentage
+                print(f"{k}:{cumulative_percent:.2f} ", end='')
+                text += f"{k}:{cumulative_percent:.2f} "
+        print()
+        text += "\n"
         if self.stats.total_seconds > 0:
             print(f"Eval perf.: {total_evals / self.stats.total_seconds / 1000:0.1f}k/s")
-
+            text += f"Eval perf.: {total_evals / self.stats.total_seconds / 1000:0.1f}k/s\n"
+        print(f"Average branching factor: {self.nodes_visited / sum(self.current_evaluations_per_depth.values())}")
+        text += f"Average branching factor: {self.nodes_visited / sum(self.current_evaluations_per_depth.values())}\n"
+        self.nodes_visited = 0
+        self.current_evaluations_per_depth = {}
         print(f"Elapsed time: {elapsed_seconds:0.1f}s")
+        text += f"Elapsed time: {elapsed_seconds:0.1f}s\n"
+        write_game_state_to_file(filename=self.options.get_filename(), text=text)
         return move
 
     def post_move_to_broker(self, move: CoordPair):
