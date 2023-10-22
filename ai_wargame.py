@@ -253,7 +253,7 @@ class Options:
     broker: str | None = None
 
     def get_filename(self):
-        return f"gameTrace-{self.alpha_beta}-{str(int(self.max_time))}-{str(self.max_turns)}.txt"
+        return f"gameTrace-{self.alpha_beta}-{str(int(self.max_time))}-{str(int(self.max_turns))}.txt"
 
 
 ##############################################################################################################
@@ -391,29 +391,26 @@ class Game:
         if self.is_valid_move(coords):
             s = self.get(coords.src)
             t = self.get(coords.dst)
-            text = ""
+            result = ""
             # case: action is self-destruct
             if s == t:
                 self._self_destruct(coords.src)
-                text += f"Self-destruct at {coords.src}\n{self}\n\n"
-                write_game_state_to_file(filename=self.options.get_filename(), text=text)
-                return (True, "")
+                result += f"Self-destruct at {coords.src}\n{self}\n\n"
+                return (True, result)
             # case: action is harmless movement
             elif t is None:
                 self.set(coords.dst, s)
                 self.set(coords.src, None)
-                text += f"Move from {coords.src} to {coords.dst}\n{self}\n\n"
-                write_game_state_to_file(filename=self.options.get_filename(), text=text)
-                return (True, "")
+                result += f"Move from {coords.src} to {coords.dst}\n{self}\n\n"
+                return (True, result)
             # case: action is attack
             elif s.player != t.player:
                 health_delta_t = -s.damage_amount(t)
                 health_delta_s = -t.damage_amount(s)
                 self.mod_health(coords.src, health_delta=health_delta_s)
                 self.mod_health(coords.dst, health_delta=health_delta_t)
-                text += f"Attack from {coords.src} to {coords.dst}\n{self}\n\n"
-                write_game_state_to_file(filename=self.options.get_filename(), text=text)
-                return (True,"")
+                result += f"Attack from {coords.src} to {coords.dst}\n{self}\n\n"
+                return (True, result)
             # case: action is repair
             else:
                 health_delta = s.repair_amount(t)
@@ -421,9 +418,8 @@ class Game:
                     # repair invalid
                     return (False, "invalid move")
                 self.mod_health(coords.dst, health_delta=health_delta)
-                text += f"Repair from {coords.src} to {coords.dst}\n{self}\n\n"
-                write_game_state_to_file(filename=self.options.get_filename(), text=text)
-                return (True, "")
+                result += f"Repair from {coords.src} to {coords.dst}\n{self}\n\n"
+                return (True, result)
         return (False, "invalid move")
 
     def next_turn(self):
@@ -490,6 +486,7 @@ class Game:
                     print(f"Broker {self.next_player.name}: ", end='')
                     print(result)
                     if success:
+                        write_game_state_to_file(filename=self.options.get_filename(), text=result)
                         self.next_turn()
                         break
                 sleep(0.1)
@@ -500,6 +497,7 @@ class Game:
                 if success:
                     print(f"Player {self.next_player.name}: ", end='')
                     print(result)
+                    write_game_state_to_file(filename=self.options.get_filename(), text=result)
                     self.next_turn()
                     break
                 else:
@@ -513,6 +511,7 @@ class Game:
             if success:
                 print(f"Computer {self.next_player.name}: ", end='')
                 print(result)
+                write_game_state_to_file(filename=self.options.get_filename(), text=result)
                 self.next_turn()
         return mv
 
@@ -583,7 +582,7 @@ class Game:
         return attacker_potential_damage - defender_potential_damage
 
     def evaluate(self, heuristic_type: str) -> int:
-        """Evaluate the board state using the given heuristic. Currently only support e0. TODO: add support for e1 and e2"""
+        """Evaluate the board state using the given heuristic. Currently only support e0, e1. TODO: add e2"""
         heuristic_value = 0
         if heuristic_type == 'e0':
             # For Attacker
@@ -622,7 +621,7 @@ class Game:
             elif self.has_winner() == Player.Defender:
                 return (MIN_HEURISTIC_SCORE, None)
         elif depth == 0 or current_elapsed_time > max_time:
-            return (self.evaluate('e1'), None)
+            return (self.evaluate('e0'), None)
 
         best_move = None
 
@@ -756,9 +755,8 @@ class Game:
 ##############################################################################################################
 
 def write_game_state_to_file(filename, text):
-    # with open(filename, 'a') as file:
-    #     file.write(text)
-    pass
+    with open(filename, 'a') as file:
+        file.write(text)
 
 
 def main():
@@ -801,7 +799,7 @@ def main():
 
     # write initial required game params to text file
     filename = options.get_filename()
-    initial_file_text = f"timeout: {options.max_time}\nmax turns: {options.max_turns}\nplayer 1 = H & player 2 = H\n\n{game}"
+    initial_file_text = f"timeout: {options.max_time}\nmax turns: {options.max_turns}\nplayer 1 = H & player 2 = H\n\n{game}\n"
     write_game_state_to_file(filename=filename, text=initial_file_text)
 
     # the main game loop
