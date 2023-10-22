@@ -737,8 +737,8 @@ class Game:
         if self.stats.total_seconds > 0:
             print(f"Eval perf.: {total_evals / self.stats.total_seconds / 1000:0.1f}k/s")
             text += f"Eval perf.: {total_evals / self.stats.total_seconds / 1000:0.1f}k/s\n"
-        print(f"Average branching factor: {self.nodes_visited / sum(self.current_evaluations_per_depth.values())}")
-        text += f"Average branching factor: {self.nodes_visited / sum(self.current_evaluations_per_depth.values())}\n"
+        print(f"Average branching factor: {sum(self.current_evaluations_per_depth.values()) / self.nodes_visited}")
+        text += f"Average branching factor: {sum(self.current_evaluations_per_depth.values()) / self.nodes_visited}\n"
         self.nodes_visited = 0
         self.current_evaluations_per_depth = {}
         print(f"Elapsed time: {elapsed_seconds:0.1f}s")
