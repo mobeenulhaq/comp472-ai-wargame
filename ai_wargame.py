@@ -253,6 +253,7 @@ class Options:
     randomize_moves: bool = True
     broker: str | None = None
     heuristic : str | None = 'e0'
+    pruning : bool | None = True
 
     def get_filename(self):
         return f"gameTrace-{self.alpha_beta}-{str(int(self.max_time))}-{str(int(self.max_turns))}.txt"
@@ -640,9 +641,9 @@ class Game:
         
         return int(heuristic_value)
 
-    def minimax(self, depth: int, alpha: float, beta: float, maximizing_player: bool, start_time: datetime, max_time: float) -> Tuple[int, CoordPair | None]:
+    def minimax(self, depth: int, alpha: float, beta: float, maximizing_player: bool, start_time: datetime, max_time: float, pruning : bool) -> Tuple[int, CoordPair | None]:
         """minimax recursive algorithm with alpha-beta pruning."""
-
+        
         current_elapsed_time = (datetime.now() - start_time).total_seconds()
         actual_depth = self.options.max_depth - depth
         if actual_depth not in self.stats.evaluations_per_depth:
@@ -676,15 +677,15 @@ class Game:
                 (success, result) = game_clone.perform_move(move)
                 if success:
                     game_clone.next_turn()
-                    eval_value, _ = game_clone.minimax(depth - 1, alpha, beta, False, start_time, max_time)
+                    eval_value, _ = game_clone.minimax(depth - 1, alpha, beta, False, start_time, max_time,pruning)
+                    
                     if eval_value > value:
                         value = eval_value
                         best_move = move
-
-                    if value > beta:
-                        break
-
-                    alpha = max(alpha, value)
+                    if pruning == True :
+                        if value > beta:
+                            break
+                        alpha = max(alpha, value)
                 else:
                     continue
 
@@ -697,19 +698,24 @@ class Game:
                 (success, result) = game_clone.perform_move(move)
                 if success:
                     game_clone.next_turn()
-                    eval_value, _ = game_clone.minimax(depth - 1, alpha, beta, True, start_time, max_time)
+                    eval_value, _ = game_clone.minimax(depth - 1, alpha, beta, True, start_time, max_time,pruning)
+                    
                     if eval_value < value:
                         value = eval_value
                         best_move = move
 
-                    if value < alpha:
-                        break
+                    if pruning == True:
+                        if value < alpha:
+                            break
 
-                    beta = min(beta, value)
+                        beta = min(beta, value)
                 else:
                     continue
 
             return value, best_move
+    
+
+
 
     def random_move(self) -> Tuple[int, CoordPair | None, float]:
         """Returns a random move."""
@@ -729,7 +735,7 @@ class Game:
         start_time = datetime.now()
 
         # Use the minimax algorithm to get the best move.
-        score, move = self.minimax(max_depth, float('-inf'), float('inf'), self.next_player == Player.Attacker, start_time, max_time)  # Attacker will always be the initial maximizer
+        score, move = self.minimax(max_depth, float('-inf'), float('inf'), self.next_player == Player.Attacker, start_time, max_time,self.options.pruning)  # Attacker will always be the initial maximizer
 
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
         self.stats.total_seconds += elapsed_seconds
@@ -843,6 +849,8 @@ def main():
     parser.add_argument('--game_type', type=str, default="manual", help='game type: auto|attacker|defender|manual')
     parser.add_argument('--broker', type=str, help='play via a game broker')
     parser.add_argument('--heuristic',type=str,default='e0')
+    parser.add_argument('--pruning',type=str,default='True')
+    
     args = parser.parse_args()
 
     # parse the game type
@@ -869,7 +877,12 @@ def main():
         options.broker = args.broker
     if args.heuristic is not None:
         options.heuristic = args.heuristic
-
+    if args.pruning is not None:
+        if(args.pruning.lower() == 'true' ):
+            options.pruning = True
+        elif (args.pruning.lower() == 'false'):
+            options.pruning = False
+                
     # create a new game
     game = Game(options=options)
 
