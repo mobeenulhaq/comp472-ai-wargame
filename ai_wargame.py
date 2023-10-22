@@ -641,46 +641,46 @@ class Game:
         best_move = None
 
         if maximizing_player:  # for the maximizing player
-            max_eval = float('-inf')
+            value = float('-inf')
             for move in self.move_candidates():
                 game_clone = self.clone()
                 (success, result) = game_clone.perform_move(move)
                 if success:
+                    game_clone.next_turn()
                     eval_value, _ = game_clone.minimax(depth - 1, alpha, beta, False, start_time, max_time)
+                    if eval_value > value:
+                        value = eval_value
+                        best_move = move
+
+                    if value > beta:
+                        break
+
+                    alpha = max(alpha, value)
                 else:
                     continue
 
-                if eval_value > max_eval:
-                    max_eval = eval_value
-                    best_move = move
-
-                if max_eval > beta:
-                    break
-
-                alpha = max(alpha, max_eval)
-
-            return max_eval, best_move
+            return value, best_move
 
         else:  # for the minimizing player
-            min_eval = float('inf')
+            value = float('inf')
             for move in self.move_candidates():
                 game_clone = self.clone()
                 (success, result) = game_clone.perform_move(move)
                 if success:
+                    game_clone.next_turn()
                     eval_value, _ = game_clone.minimax(depth - 1, alpha, beta, True, start_time, max_time)
+                    if eval_value < value:
+                        value = eval_value
+                        best_move = move
+
+                    if value < alpha:
+                        break
+
+                    beta = min(beta, value)
                 else:
                     continue
 
-                if eval_value < min_eval:
-                    min_eval = eval_value
-                    best_move = move
-
-                if min_eval < alpha:
-                    break
-
-                beta = min(beta, min_eval)
-
-            return min_eval, best_move
+            return value, best_move
 
     def random_move(self) -> Tuple[int, CoordPair | None, float]:
         """Returns a random move."""
