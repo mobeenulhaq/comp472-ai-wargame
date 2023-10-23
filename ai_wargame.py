@@ -211,6 +211,10 @@ class CoordPair:
                 return True
         return False
 
+    def euclidean_distance(self) -> float:
+        """Calculate the Euclidean distance between src and dst."""
+        return math.sqrt(((self.dst.row - self.src.row) ** 2) + ((self.dst.col - self.src.col) ** 2))
+
     @classmethod
     def from_quad(cls, row0: int, col0: int, row1: int, col1: int) -> CoordPair:
         """Create a CoordPair from 4 integers."""
@@ -252,8 +256,7 @@ class Options:
     max_turns: int | None = 100
     randomize_moves: bool = True
     broker: str | None = None
-    heuristic : str | None = 'e0'
-    pruning : bool | None = True
+    heuristic: str | None = 'e0'
 
     def get_filename(self):
         return f"gameTrace-{self.alpha_beta}-{str(int(self.max_time))}-{str(int(self.max_turns))}.txt"
@@ -585,30 +588,35 @@ class Game:
                 defender_potential_damage += Unit.damage_table[unit.type.value][opp_unit.type.value]
 
         return attacker_potential_damage - defender_potential_damage
-    
-    def get_distance_between_coord (self,Coord1 :Coord, Coord2 : Coord) :
-        columne_distance = Coord1.col - Coord2.col
-        row_distance = Coord1.row - Coord2.row
-        return math.sqrt(columne_distance ** 2 + row_distance **2 )
 
-    def get_distance_from_AI(self):
-        # Calculate Distance of AI from Friendly Units
-        attacker_ai_distance = 0
-        defender_ai_distance = 0
-        for coords,unit in self.player_units(Player.Attacker):
-            if(unit.type == UnitType.AI):
-                for friendly_coord,friendly_unit in self.player_units(Player.Attacker):
-                    if(friendly_unit.type != UnitType.AI):
-                        attacker_ai_distance += 1/(self.get_distance_between_coord(coords,friendly_coord))
-                break
-        
-        for coords,unit in self.player_units(Player.Defender):
-            if(unit.type == UnitType.AI):
-                for friendly_coord,friendly_unit in self.player_units(Player.Defender):
-                    if(friendly_unit.type != UnitType.AI):
-                        defender_ai_distance += 1/(self.get_distance_between_coord(coords,friendly_coord))
-                break
+    def calculate_ai_distance(self, player: Player):  # for e2
+        """Helper function to calculate the sum of 1/distances for the AI unit of a player."""
+        ai_coord = next((coord for coord, unit in self.player_units(player) if unit.type == UnitType.AI), None)
+        if not ai_coord:  # If no AI unit is found
+            return 0
+
+        total_distance = sum(
+            1 / CoordPair(ai_coord, friendly_coord).euclidean_distance()
+            for friendly_coord, friendly_unit in self.player_units(player)
+            if friendly_unit.type != UnitType.AI
+        )
+
+        return total_distance
+
+    def get_distance_from_ai(self):  # for e2
+        attacker_ai_distance = self.calculate_ai_distance(Player.Attacker)
+        defender_ai_distance = self.calculate_ai_distance(Player.Defender)
         return attacker_ai_distance - defender_ai_distance
+
+    def get_attacker_adjacent_adversary_count(self):  # for e2
+        """Count the number of units that the attacker has in attacking positions (adjacent to enemy units)"""
+        count = 0
+        for attacker_coord, _ in self.player_units(Player.Attacker):
+            for coord in attacker_coord.iter_adjacent():
+                unit = self.get(coord)
+                if (unit is not None) and (unit.player == Player.Defender):
+                    count += 1
+        return count
 
     def evaluate(self, heuristic_type: str) -> int:
         """Evaluate the board state using the given heuristic. Currently only support e0, e1. TODO: add e2"""
@@ -635,13 +643,12 @@ class Game:
             aggregate_health_delta = self.get_aggregate_health(Player.Attacker) - self.get_aggregate_health(Player.Defender)
             potential_damage_delta = self.get_potential_damage_delta()
             heuristic_value = aggregate_health_delta + potential_damage_delta
-        
         elif heuristic_type == 'e2':
-            heuristic_value = self.get_distance_from_AI()
+            heuristic_value = self.get_distance_from_ai() + self.get_attacker_adjacent_adversary_count()
         
         return int(heuristic_value)
 
-    def minimax(self, depth: int, alpha: float, beta: float, maximizing_player: bool, start_time: datetime, max_time: float, pruning : bool) -> Tuple[int, CoordPair | None]:
+    def minimax(self, depth: int, alpha: float, beta: float, maximizing_player: bool, start_time: datetime, max_time: float, alpha_beta: bool) -> Tuple[int, CoordPair | None]:
         """minimax recursive algorithm with alpha-beta pruning."""
         
         current_elapsed_time = (datetime.now() - start_time).total_seconds()
@@ -677,12 +684,13 @@ class Game:
                 (success, result) = game_clone.perform_move(move)
                 if success:
                     game_clone.next_turn()
-                    eval_value, _ = game_clone.minimax(depth - 1, alpha, beta, False, start_time, max_time,pruning)
+                    eval_value, _ = game_clone.minimax(depth - 1, alpha, beta, False, start_time, max_time, alpha_beta)
                     
                     if eval_value > value:
                         value = eval_value
                         best_move = move
-                    if pruning == True :
+
+                    if alpha_beta:
                         if value > beta:
                             break
                         alpha = max(alpha, value)
@@ -698,24 +706,20 @@ class Game:
                 (success, result) = game_clone.perform_move(move)
                 if success:
                     game_clone.next_turn()
-                    eval_value, _ = game_clone.minimax(depth - 1, alpha, beta, True, start_time, max_time,pruning)
+                    eval_value, _ = game_clone.minimax(depth - 1, alpha, beta, True, start_time, max_time, alpha_beta)
                     
                     if eval_value < value:
                         value = eval_value
                         best_move = move
 
-                    if pruning == True:
+                    if alpha_beta:
                         if value < alpha:
                             break
-
                         beta = min(beta, value)
                 else:
                     continue
 
             return value, best_move
-    
-
-
 
     def random_move(self) -> Tuple[int, CoordPair | None, float]:
         """Returns a random move."""
@@ -735,7 +739,15 @@ class Game:
         start_time = datetime.now()
 
         # Use the minimax algorithm to get the best move.
-        score, move = self.minimax(max_depth, float('-inf'), float('inf'), self.next_player == Player.Attacker, start_time, max_time,self.options.pruning)  # Attacker will always be the initial maximizer
+        score, move = self.minimax(
+            depth=max_depth,
+            alpha=float('-inf'),
+            beta=float('inf'),
+            maximizing_player=self.next_player == Player.Attacker,  # Attacker will always be the initial maximizer
+            start_time=start_time,
+            max_time=max_time,
+            alpha_beta=self.options.alpha_beta
+        )
 
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
         self.stats.total_seconds += elapsed_seconds
@@ -848,9 +860,9 @@ def main():
     parser.add_argument('--max_turns', type=float, help='maximum number of turns')
     parser.add_argument('--game_type', type=str, default="manual", help='game type: auto|attacker|defender|manual')
     parser.add_argument('--broker', type=str, help='play via a game broker')
-    parser.add_argument('--heuristic',type=str,default='e0')
-    parser.add_argument('--pruning',type=str,default='True')
-    
+    parser.add_argument('--heuristic', type=int, default=0)
+    parser.add_argument('--alpha_beta', type=bool, default=True)
+
     args = parser.parse_args()
 
     # parse the game type
@@ -876,12 +888,9 @@ def main():
     if args.broker is not None:
         options.broker = args.broker
     if args.heuristic is not None:
-        options.heuristic = args.heuristic
-    if args.pruning is not None:
-        if(args.pruning.lower() == 'true' ):
-            options.pruning = True
-        elif (args.pruning.lower() == 'false'):
-            options.pruning = False
+        options.heuristic = f"e{args.heuristic}"
+    if args.alpha_beta is not None:
+        options.alpha_beta = args.alpha_beta
                 
     # create a new game
     game = Game(options=options)
