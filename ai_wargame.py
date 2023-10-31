@@ -861,7 +861,7 @@ def main():
     parser.add_argument('--game_type', type=str, default="manual", help='game type: auto|attacker|defender|manual')
     parser.add_argument('--broker', type=str, help='play via a game broker')
     parser.add_argument('--heuristic', type=int, default=0)
-    parser.add_argument('--alpha_beta', type=bool, default=True)
+    parser.add_argument('--alpha_beta', type=str, default="true")
 
     args = parser.parse_args()
 
@@ -890,7 +890,7 @@ def main():
     if args.heuristic is not None:
         options.heuristic = f"e{args.heuristic}"
     if args.alpha_beta is not None:
-        options.alpha_beta = args.alpha_beta
+        options.alpha_beta = (args.alpha_beta.lower() == "true")
                 
     # create a new game
     game = Game(options=options)
